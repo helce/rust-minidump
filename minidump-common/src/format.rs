@@ -806,6 +806,7 @@ bitflags! {
         const CONTEXT_PPC64 = 0x1000000;
         const CONTEXT_SPARC = 0x10000000;
         const CONTEXT_X86 = 0x10000;
+        const CONTEXT_E2K = 0x00000800;
     }
 }
 
@@ -1406,6 +1407,34 @@ pub struct CONTEXT_X86 {
     pub extended_registers: [u8; 512], // MAXIMUM_SUPPORTED_EXTENSION
 }
 
+/// e2k CPU context
+///
+/// This is a Breakpad extension, as there is no definition of `CONTEXT` for e2k in WinNT.h.
+#[derive(Debug, Clone, Pread, Pwrite, SizeWith)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct CONTEXT_E2K {
+    pub context_flags: u32,
+    pub g: [u64; 32],
+    pub usbr: u64,
+    pub usd_lo: u64,
+    pub usd_hi: u64,
+    pub psp_lo: u64,
+    pub psp_hi: u64,
+    pub pshtp: u64,
+    pub cr0_lo: u64,
+    pub cr0_hi: u64,
+    pub cr1_lo: u64,
+    pub cr1_hi: u64,
+    pub pcsp_lo: u64,
+    pub pcsp_hi: u64,
+    pub pcshtp: u64,
+    pub ctpr1: u64,
+    pub ctpr2: u64,
+    pub ctpr3: u64,
+    pub ps: u64,
+    pub pcs: u64,
+}
+
 /// CPU information contained within the [`MINIDUMP_SYSTEM_INFO`] struct
 ///
 /// This struct matches the definition of the `CPU_INFORMATION` union from minidumpapiset.h.
@@ -1440,6 +1469,15 @@ pub struct ARMCpuInfo {
     ///
     /// See [`ArmElfHwCaps`] for possible values.
     pub elf_hwcaps: u32,
+}
+
+/// E2k-specific CPU information (Breakpad extension)
+#[derive(Debug, Clone, Pread, Pwrite, SizeWith)]
+pub struct E2KCpuInfo {
+    pub vendor_id: [u32; 3],
+    pub iset_id: u32,
+    pub model_id: u32,
+    pub revision_id: u32,
 }
 
 /// CPU information for non-x86 CPUs
@@ -1510,6 +1548,8 @@ pub enum ProcessorArchitecture {
     PROCESSOR_ARCHITECTURE_ARM64_OLD = 0x8003,
     /// Breakpad-defined value for MIPS64
     PROCESSOR_ARCHITECTURE_MIPS64 = 0x8004,
+    /// Breakpad-defined value for E2K
+    PROCESSOR_ARCHITECTURE_E2K = 0x8005,
     PROCESSOR_ARCHITECTURE_UNKNOWN = 0xffff,
 }
 
