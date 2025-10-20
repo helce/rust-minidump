@@ -712,6 +712,21 @@ pub struct MINIDUMP_THREAD {
     pub thread_context: MINIDUMP_LOCATION_DESCRIPTOR,
 }
 
+/// Extended information about a single thread from a minidump for e2k
+///
+/// This is a Breakpad extension.
+#[derive(Debug, Clone, Pread, Pwrite, SizeWith)]
+pub struct MINIDUMP_THREAD_E2K {
+    /// The identifier of the thread
+    pub thread_id: u32,
+    /// The location and base address of this thread's procedure stack memory
+    pub proc_stack: MINIDUMP_MEMORY_DESCRIPTOR,
+    /// The location and base address of this thread's chain stack memory
+    pub chain_stack: MINIDUMP_LOCATION_DESCRIPTOR,
+    /// Struct should be the same size as MINIDUMP_THREAD
+    pub unused: u64,
+}
+
 /// Information about the exception that caused the process to terminate.
 ///
 /// This struct matches the [Microsoft struct][msdn] of the same name.
