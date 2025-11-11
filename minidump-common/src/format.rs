@@ -1435,19 +1435,12 @@ pub struct CONTEXT_E2K {
     pub usd_hi: u64,
     pub psp_lo: u64,
     pub psp_hi: u64,
-    pub pshtp: u64,
     pub cr0_lo: u64,
     pub cr0_hi: u64,
     pub cr1_lo: u64,
     pub cr1_hi: u64,
     pub pcsp_lo: u64,
     pub pcsp_hi: u64,
-    pub pcshtp: u64,
-    pub ctpr1: u64,
-    pub ctpr2: u64,
-    pub ctpr3: u64,
-    pub ps: u64,
-    pub pcs: u64,
 }
 
 /// CPU information contained within the [`MINIDUMP_SYSTEM_INFO`] struct
