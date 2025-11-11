@@ -722,7 +722,7 @@ pub struct MINIDUMP_THREAD_E2K {
     /// The location and base address of this thread's procedure stack memory
     pub proc_stack: MINIDUMP_MEMORY_DESCRIPTOR,
     /// The location and base address of this thread's chain stack memory
-    pub chain_stack: MINIDUMP_LOCATION_DESCRIPTOR,
+    pub chain_stack: MINIDUMP_MEMORY_DESCRIPTOR,
     /// Struct should be the same size as MINIDUMP_THREAD
     pub unused: u64,
 }
