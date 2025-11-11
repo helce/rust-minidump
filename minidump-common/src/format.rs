@@ -1425,7 +1425,7 @@ pub struct CONTEXT_X86 {
 /// e2k CPU context
 ///
 /// This is a Breakpad extension, as there is no definition of `CONTEXT` for e2k in WinNT.h.
-#[derive(Debug, Clone, Pread, Pwrite, SizeWith)]
+#[derive(Debug, Clone, SmartDefault, Pread, Pwrite, SizeWith)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct CONTEXT_E2K {
     pub context_flags: u32,
