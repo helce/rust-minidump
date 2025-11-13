@@ -719,12 +719,14 @@ pub struct MINIDUMP_THREAD {
 pub struct MINIDUMP_THREAD_E2K {
     /// The identifier of the thread
     pub thread_id: u32,
+    /// Struct should be the same size as MINIDUMP_THREAD
+    pub _pad0: u32,
     /// The location and base address of this thread's procedure stack memory
     pub proc_stack: MINIDUMP_MEMORY_DESCRIPTOR,
     /// The location and base address of this thread's chain stack memory
     pub chain_stack: MINIDUMP_MEMORY_DESCRIPTOR,
     /// Struct should be the same size as MINIDUMP_THREAD
-    pub unused: u64,
+    pub _pad1: u64,
 }
 
 /// Information about the exception that caused the process to terminate.
