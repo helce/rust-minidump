@@ -85,7 +85,6 @@ pub struct MINIDUMP_HEADER {
 /// This struct matches the [Microsoft struct][msdn] of the same name.
 ///
 /// [msdn]: https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_location_descriptor
-#[cfg_attr(target_arch = "e2k", repr(C))]
 #[derive(Debug, Copy, Default, Clone, Pread, Pwrite, SizeWith)]
 pub struct MINIDUMP_LOCATION_DESCRIPTOR {
     /// The size of this data.
@@ -106,7 +105,6 @@ impl From<u8> for MINIDUMP_LOCATION_DESCRIPTOR {
 /// This struct matches the [Microsoft struct][msdn] of the same name.
 ///
 /// [msdn]: https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_memory_descriptor
-#[cfg_attr(target_arch = "e2k", repr(C))]
 #[derive(Debug, Copy, Clone, Default, Pread, Pwrite, SizeWith)]
 pub struct MINIDUMP_MEMORY_DESCRIPTOR {
     /// The base address of this memory range from the process.
@@ -690,7 +688,6 @@ pub struct IMAGE_DEBUG_MISC {
 /// This struct matches the [Microsoft struct][msdn] of the same name.
 ///
 /// [msdn]: https://docs.microsoft.com/en-us/windows/win32/api/minidumpapiset/ns-minidumpapiset-minidump_thread
-#[cfg_attr(target_arch = "e2k", repr(C))]
 #[derive(Debug, Clone, Pread, Pwrite, SizeWith)]
 pub struct MINIDUMP_THREAD {
     /// The identifier of this thread
@@ -718,7 +715,6 @@ pub struct MINIDUMP_THREAD {
 /// Extended information about a single thread from a minidump for e2k
 ///
 /// This is a Breakpad extension.
-#[cfg_attr(target_arch = "e2k", repr(C))]
 #[derive(Debug, Clone, Pread, Pwrite, SizeWith)]
 pub struct MINIDUMP_THREAD_E2K {
     /// The identifier of the thread
