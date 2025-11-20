@@ -3303,6 +3303,36 @@ impl MinidumpStream<'_> for MinidumpSystemInfo {
 
                 Some(cpu_info)
             }
+            Cpu::E2k => {
+                let mut cpu_info = String::new();
+
+                let e2k_info: md::E2KCpuInfo = raw
+                    .cpu
+                    .data
+                    .pread_with(0, endian)
+                    .or(Err(Error::StreamReadFailure))?;
+
+                cpu_info.extend(
+                    e2k_info
+                        .vendor_id
+                        .iter()
+                        .flat_map(|i| IntoIterator::into_iter(i.to_le_bytes()))
+                        .map(char::from),
+                );
+                cpu_info.push(' ');
+
+                write!(
+                    &mut cpu_info,
+                    "v{} model {} revision {}",
+                    e2k_info.iset_id,
+                    e2k_info.model_id,
+                    e2k_info.revision_id
+                )
+                .unwrap();
+
+                Some(cpu_info)
+            }
+
             _ => None,
         };
 

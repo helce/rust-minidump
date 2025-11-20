@@ -30,6 +30,7 @@ pub enum MinidumpRawContext {
     Arm64(md::CONTEXT_ARM64),
     OldArm64(md::CONTEXT_ARM64_OLD),
     Mips(md::CONTEXT_MIPS),
+    E2k(md::CONTEXT_E2K),
 }
 
 /// Generic over the specifics of a CPU context.
@@ -988,6 +989,125 @@ impl CpuContext for md::CONTEXT_SPARC {
     }
 }
 
+impl CpuContext for md::CONTEXT_E2K {
+    type Register = u64;
+
+    const REGISTERS: &'static [&'static str] = &[
+        "g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9",
+        "g10", "g11", "g12", "g13", "g14", "g15", "g16", "g17", "g18", "g19",
+        "g20", "g21", "g22", "g23", "g24", "g25", "g26", "g27", "g28", "g29",
+        "g30", "g31", "usbr", "usd_lo", "usd_hi", "psp_lo", "psp_hi", "cr0_lo",
+        "cr0_hi", "cr1_lo", "cr1_hi", "pcsp_lo", "pcsp_hi",
+    ];
+
+    fn get_register_always(&self, reg: &str) -> Self::Register {
+        match reg {
+            "g0" => self.g[0],
+            "g1" => self.g[1],
+            "g2" => self.g[2],
+            "g3" => self.g[3],
+            "g4" => self.g[4],
+            "g5" => self.g[5],
+            "g6" => self.g[6],
+            "g7" => self.g[7],
+            "g8" => self.g[8],
+            "g9" => self.g[9],
+            "g10" => self.g[10],
+            "g11" => self.g[11],
+            "g12" => self.g[12],
+            "g13" => self.g[13],
+            "g14" => self.g[14],
+            "g15" => self.g[15],
+            "g16" => self.g[16],
+            "g17" => self.g[17],
+            "g18" => self.g[18],
+            "g19" => self.g[19],
+            "g20" => self.g[20],
+            "g21" => self.g[21],
+            "g22" => self.g[22],
+            "g23" => self.g[23],
+            "g24" => self.g[24],
+            "g25" => self.g[25],
+            "g26" => self.g[26],
+            "g27" => self.g[27],
+            "g28" => self.g[28],
+            "g29" => self.g[29],
+            "g30" => self.g[30],
+            "g31" => self.g[31],
+            "usbr" => self.usbr,
+            "usd_lo" => self.usd_lo,
+            "usd_hi" => self.usd_hi,
+            "psp_lo" => self.psp_lo,
+            "psp_hi" => self.psp_hi,
+            "cr0_lo" => self.cr0_lo,
+            "cr0_hi" => self.cr0_hi,
+            "cr1_lo" => self.cr1_lo,
+            "cr1_hi" => self.cr1_hi,
+            "pcsp_lo" => self.pcsp_lo,
+            "pcsp_hi" => self.pcsp_hi,
+            _ => unreachable!("Invalid e2k register! {}", reg),
+        }
+    }
+
+    fn set_register(&mut self, reg: &str, val: Self::Register) -> Option<()> {
+        match reg {
+            "g0" => self.g[0] = val,
+            "g1" => self.g[1] = val,
+            "g2" => self.g[2] = val,
+            "g3" => self.g[3] = val,
+            "g4" => self.g[4] = val,
+            "g5" => self.g[5] = val,
+            "g6" => self.g[6] = val,
+            "g7" => self.g[7] = val,
+            "g8" => self.g[8] = val,
+            "g9" => self.g[9] = val,
+            "g10" => self.g[10] = val,
+            "g11" => self.g[11] = val,
+            "g12" => self.g[12] = val,
+            "g13" => self.g[13] = val,
+            "g14" => self.g[14] = val,
+            "g15" => self.g[15] = val,
+            "g16" => self.g[16] = val,
+            "g17" => self.g[17] = val,
+            "g18" => self.g[18] = val,
+            "g19" => self.g[19] = val,
+            "g20" => self.g[20] = val,
+            "g21" => self.g[21] = val,
+            "g22" => self.g[22] = val,
+            "g23" => self.g[23] = val,
+            "g24" => self.g[24] = val,
+            "g25" => self.g[25] = val,
+            "g26" => self.g[26] = val,
+            "g27" => self.g[27] = val,
+            "g28" => self.g[28] = val,
+            "g29" => self.g[29] = val,
+            "g30" => self.g[30] = val,
+            "g31" => self.g[31] = val,
+            "usbr" => self.usbr = val,
+            "usd_lo" => self.usd_lo = val,
+            "usd_hi" => self.usd_hi = val,
+            "psp_lo" => self.psp_lo = val,
+            "psp_hi" => self.psp_hi = val,
+            "cr0_lo" => self.cr0_lo = val,
+            "cr0_hi" => self.cr0_hi = val,
+            "cr1_lo" => self.cr1_lo = val,
+            "cr1_hi" => self.cr1_hi = val,
+            "pcsp_lo" => self.pcsp_lo = val,
+            "pcsp_hi" => self.pcsp_hi = val,
+            _ => return None,
+        }
+        Some(())
+    }
+
+    fn stack_pointer_register_name(&self) -> &'static str {
+        "usd_lo"
+    }
+
+    fn instruction_pointer_register_name(&self) -> &'static str {
+        "cr0_hi"
+    }
+}
+
 /// Information about which registers are valid in a `MinidumpContext`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MinidumpContextValidity {
@@ -1173,6 +1293,18 @@ impl MinidumpContext {
                     Err(ContextError::ReadFailure)
                 }
             }
+            Some(PROCESSOR_ARCHITECTURE_E2K) => {
+                let ctx: md::CONTEXT_E2K = bytes
+                    .gread_with(&mut offset, endian)
+                    .or(Err(ContextError::ReadFailure))?;
+
+                let flags = ContextFlagsCpu::from_flags(ctx.context_flags);
+                if flags == ContextFlagsCpu::CONTEXT_E2K {
+                    Ok(MinidumpContext::from_raw(MinidumpRawContext::E2k(ctx)))
+                } else {
+                    Err(ContextError::ReadFailure)
+                }
+            }
             _ => Err(ContextError::UnknownCpuContext),
         }
     }
@@ -1190,6 +1322,7 @@ impl MinidumpContext {
             MinidumpRawContext::Sparc(ref ctx) => ctx.pc,
             MinidumpRawContext::X86(ref ctx) => ctx.eip as u64,
             MinidumpRawContext::Mips(ref ctx) => ctx.epc,
+            MinidumpRawContext::E2k(ref ctx) => ctx.cr0_hi & 0xffff_ffff_ffff,
         }
     }
 
@@ -1214,6 +1347,7 @@ impl MinidumpContext {
             MinidumpRawContext::Mips(ref ctx) => {
                 ctx.iregs[md::MipsRegisterNumbers::StackPointer as usize]
             }
+            MinidumpRawContext::E2k(ref ctx) => ctx.usd_lo & 0xffff_ffff_ffff,
         }
     }
 
@@ -1228,6 +1362,7 @@ impl MinidumpContext {
             MinidumpRawContext::Sparc(ref ctx) => ctx.get_register_always(reg),
             MinidumpRawContext::X86(ref ctx) => ctx.get_register_always(reg).into(),
             MinidumpRawContext::Mips(ref ctx) => ctx.get_register_always(reg),
+            MinidumpRawContext::E2k(ref ctx) => ctx.get_register_always(reg),
         }
     }
 
@@ -1242,6 +1377,7 @@ impl MinidumpContext {
             MinidumpRawContext::Arm64(ctx) => ctx.register_is_valid(reg, &self.valid),
             MinidumpRawContext::OldArm64(ctx) => ctx.register_is_valid(reg, &self.valid),
             MinidumpRawContext::Mips(ctx) => ctx.register_is_valid(reg, &self.valid),
+            MinidumpRawContext::E2k(ctx) => ctx.register_is_valid(reg, &self.valid),
         };
 
         if valid {
@@ -1262,6 +1398,7 @@ impl MinidumpContext {
             MinidumpRawContext::Sparc(ref ctx) => ctx.format_register(reg),
             MinidumpRawContext::X86(ref ctx) => ctx.format_register(reg),
             MinidumpRawContext::Mips(ref ctx) => ctx.format_register(reg),
+            MinidumpRawContext::E2k(ref ctx) => ctx.format_register(reg),
         }
     }
 
@@ -1276,6 +1413,7 @@ impl MinidumpContext {
             MinidumpRawContext::Sparc(_) => md::CONTEXT_SPARC::REGISTERS,
             MinidumpRawContext::X86(_) => md::CONTEXT_X86::REGISTERS,
             MinidumpRawContext::Mips(_) => md::CONTEXT_MIPS::REGISTERS,
+            MinidumpRawContext::E2k(_) => md::CONTEXT_E2K::REGISTERS,
         }
     }
 
@@ -1299,6 +1437,7 @@ impl MinidumpContext {
             MinidumpRawContext::Arm64(ctx) => ctx.register_is_valid(reg, &self.valid),
             MinidumpRawContext::OldArm64(ctx) => ctx.register_is_valid(reg, &self.valid),
             MinidumpRawContext::Mips(ctx) => ctx.register_is_valid(reg, &self.valid),
+            MinidumpRawContext::E2k(ctx) => ctx.register_is_valid(reg, &self.valid),
         })
     }
 
@@ -1318,6 +1457,7 @@ impl MinidumpContext {
             MinidumpRawContext::Arm64(ctx) => get(ctx),
             MinidumpRawContext::OldArm64(ctx) => get(ctx),
             MinidumpRawContext::Mips(ctx) => get(ctx),
+            MinidumpRawContext::E2k(ctx) => get(ctx),
         }
     }
 
@@ -1611,6 +1751,9 @@ impl MinidumpContext {
                         raw.iregs[*reg as usize]
                     )?;
                 }
+            }
+            MinidumpRawContext::E2k(_) => {
+                unimplemented!();
             }
         }
         Ok(())
