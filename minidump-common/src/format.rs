@@ -729,6 +729,17 @@ pub struct MINIDUMP_THREAD_E2K {
     pub _pad1: u64,
 }
 
+/// Extended thread
+///
+/// This is a Breakpad extension.
+#[derive(Debug, Clone, Pread, Pwrite, SizeWith)]
+pub struct MINIDUMP_THREAD_EXTEND {
+    /// The original thread information
+    pub thread: MINIDUMP_THREAD,
+    /// The e2k extension
+    pub e2k_thread: MINIDUMP_THREAD_E2K,
+}
+
 /// Information about the exception that caused the process to terminate.
 ///
 /// This struct matches the [Microsoft struct][msdn] of the same name.
