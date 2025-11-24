@@ -10,6 +10,7 @@ mod amd64;
 mod arm;
 mod arm64;
 mod arm64_old;
+mod e2k;
 mod mips;
 pub mod symbols;
 pub mod system_info;
@@ -68,6 +69,8 @@ pub enum FrameTrust {
     PreWalked,
     /// Given as instruction pointer in a context.
     Context,
+    /// Derived from chain file
+    CF,
 }
 
 impl FrameTrust {
@@ -81,6 +84,7 @@ impl FrameTrust {
             FrameTrust::CfiScan => "call frame info with scanning",
             FrameTrust::FramePointer => "previous frame's frame pointer",
             FrameTrust::Scan => "stack scanning",
+            FrameTrust::CF => "e2k chain file",
             FrameTrust::None => "unknown",
         }
     }
@@ -93,6 +97,7 @@ impl FrameTrust {
             FrameTrust::CfiScan => "cfi_scan",
             FrameTrust::FramePointer => "frame_pointer",
             FrameTrust::Scan => "scan",
+            FrameTrust::CF => "chain_file",
             FrameTrust::None => "non",
         }
     }
@@ -518,7 +523,7 @@ impl CallStack {
                 use MinidumpRawContext::*;
                 let pointer_width = match &frame.context.raw {
                     X86(_) | Ppc(_) | Sparc(_) | Arm(_) | Mips(_) => 4,
-                    Ppc64(_) | Amd64(_) | Arm64(_) | OldArm64(_) => 8,
+                    Ppc64(_) | Amd64(_) | Arm64(_) | OldArm64(_) | E2k(_) => 8,
                 };
 
                 let cc_summary = match args.calling_convention {
@@ -671,6 +676,7 @@ where
         MinidumpRawContext::Amd64(ref ctx) => amd64::get_caller_frame(ctx, args).await,
         MinidumpRawContext::X86(ref ctx) => x86::get_caller_frame(ctx, args).await,
         MinidumpRawContext::Mips(ref ctx) => mips::get_caller_frame(ctx, args).await,
+        MinidumpRawContext::E2k(ref ctx) => e2k::get_caller_frame(ctx, args).await,
         _ => None,
     }
 }
