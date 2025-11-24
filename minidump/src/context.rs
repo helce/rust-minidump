@@ -1351,6 +1351,16 @@ impl MinidumpContext {
         }
     }
 
+    pub fn get_chain_stack_pointer(&self) -> u64 {
+        match self.raw {
+            MinidumpRawContext::E2k(ref ctx) => {
+                (ctx.pcsp_lo & 0xffff_ffff_ffff) +
+                (ctx.pcsp_hi & 0xffff_ffff)
+            }
+            _ => unimplemented!(),
+        }
+    }
+
     pub fn get_register_always(&self, reg: &str) -> u64 {
         match self.raw {
             MinidumpRawContext::Amd64(ref ctx) => ctx.get_register_always(reg),

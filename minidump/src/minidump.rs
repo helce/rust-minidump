@@ -332,10 +332,16 @@ pub struct MinidumpHandleDataStream {
 pub struct MinidumpThread<'a> {
     /// The `MINIDUMP_THREAD` direct from the minidump file.
     pub raw: md::MINIDUMP_THREAD,
+    /// The `MINIDUMP_THREAD_E2K` direct from the minidump file.
+    pub raw_e2k: Option<md::MINIDUMP_THREAD_E2K>,
     /// The CPU context for the thread, if present.
     context: Option<&'a [u8]>,
     /// The stack memory for the thread, if present.
     stack: Option<MinidumpMemory<'a>>,
+    /// The procedure stack memory for the thread, if present.
+    proc_stack: Option<MinidumpMemory<'a>>,
+    /// The chain stack memory for the thread, if present.
+    chain_stack: Option<MinidumpMemory<'a>>,
     /// Saved endianness for lazy parsing.
     endian: scroll::Endian,
 }
@@ -2856,6 +2862,36 @@ impl<'a> MinidumpThread<'a> {
         })
     }
 
+    pub fn proc_stack_memory<'mem>(
+        &'mem self,
+        memory_list: &'mem UnifiedMemoryList<'a>,
+    ) -> Option<UnifiedMemory<'mem, 'a>> {
+        self.proc_stack.as_ref().map(UnifiedMemory::Memory).or_else(|| {
+            // Sometimes the raw_e2k.proc_stack RVA is null/busted, but the start_of_memory_range
+            // value is correct. So if the `read` fails, try resolving start_of_memory_range
+            // with the MinidumpMemoryList. (This seems to specifically be a problem with
+            // Windows minidumps.)
+            let stack_addr = self.raw_e2k.clone().unwrap().proc_stack.start_of_memory_range;
+            let memory = memory_list.memory_at_address(stack_addr)?;
+            Some(memory)
+        })
+    }
+
+    pub fn chain_stack_memory<'mem>(
+        &'mem self,
+        memory_list: &'mem UnifiedMemoryList<'a>,
+    ) -> Option<UnifiedMemory<'mem, 'a>> {
+        self.chain_stack.as_ref().map(UnifiedMemory::Memory).or_else(|| {
+            // Sometimes the raw_e2k.chain_stack RVA is null/busted, but the start_of_memory_range
+            // value is correct. So if the `read` fails, try resolving start_of_memory_range
+            // with the MinidumpMemoryList. (This seems to specifically be a problem with
+            // Windows minidumps.)
+            let stack_addr = self.raw_e2k.clone().unwrap().chain_stack.start_of_memory_range;
+            let memory = memory_list.memory_at_address(stack_addr)?;
+            Some(memory)
+        })
+    }
+
     /// Write a human-readable description of this `MinidumpThread` to `f`.
     ///
     /// This is very verbose, it is the format used by `minidump_dump`.
@@ -2979,33 +3015,68 @@ impl<'a> MinidumpStream<'a> for MinidumpThreadList<'a> {
         bytes: &'a [u8],
         all: &'a [u8],
         endian: scroll::Endian,
-        _system_info: Option<&MinidumpSystemInfo>,
+        system_info: Option<&MinidumpSystemInfo>,
     ) -> Result<MinidumpThreadList<'a>, Error> {
         let mut offset = 0;
-        let raw_threads: Vec<md::MINIDUMP_THREAD> = read_stream_list(&mut offset, bytes, endian)?;
-        let mut threads = Vec::with_capacity(raw_threads.len());
-        let mut thread_ids = HashMap::with_capacity(raw_threads.len());
-        for raw in raw_threads.into_iter() {
-            thread_ids.insert(raw.thread_id, threads.len());
+        if system_info.unwrap().cpu == Cpu::E2k {
+            let raw_threads: Vec<md::MINIDUMP_THREAD_EXTEND> = read_stream_list(&mut offset, bytes, endian)?;
+            let mut threads = Vec::with_capacity(raw_threads.len());
+            let mut thread_ids = HashMap::with_capacity(raw_threads.len());
+            for raw in raw_threads.into_iter() {
+                thread_ids.insert(raw.thread.thread_id, threads.len());
 
-            // Defer parsing of this to the `context` method, where we will have access
-            // to other streams that are required to parse a context properly.
-            let context = location_slice(all, &raw.thread_context).ok();
+                // Defer parsing of this to the `context` method, where we will have access
+                // to other streams that are required to parse a context properly.
+                let context = location_slice(all, &raw.thread.thread_context).ok();
 
-            // Try to get the stack memory here, but the `stack_memory` method will
-            // attempt a fallback method with access to other streams.
-            let stack = MinidumpMemory::read(&raw.stack, all, endian).ok();
-            threads.push(MinidumpThread {
-                raw,
-                context,
-                stack,
-                endian,
-            });
+                // Try to get the stack memory here, but the `stack_memory` method will
+                // attempt a fallback method with access to other streams.
+                let stack = MinidumpMemory::read(&raw.thread.stack, all, endian).ok();
+                let proc_stack = MinidumpMemory::read(&raw.e2k_thread.proc_stack, all, endian).ok();
+                let chain_stack = MinidumpMemory::read(&raw.e2k_thread.chain_stack, all, endian).ok();
+                threads.push(MinidumpThread {
+                    raw: raw.thread,
+                    raw_e2k: Some(raw.e2k_thread),
+                    context,
+                    stack,
+                    proc_stack,
+                    chain_stack,
+                    endian,
+                });
+            }
+            Ok(MinidumpThreadList {
+                threads,
+                thread_ids,
+            })
+        } else {
+            let raw_threads: Vec<md::MINIDUMP_THREAD> = read_stream_list(&mut offset, bytes, endian)?;
+            let mut threads = Vec::with_capacity(raw_threads.len());
+            let mut thread_ids = HashMap::with_capacity(raw_threads.len());
+            for raw in raw_threads.into_iter() {
+                thread_ids.insert(raw.thread_id, threads.len());
+
+                // Defer parsing of this to the `context` method, where we will have access
+                // to other streams that are required to parse a context properly.
+                let context = location_slice(all, &raw.thread_context).ok();
+
+                // Try to get the stack memory here, but the `stack_memory` method will
+                // attempt a fallback method with access to other streams.
+                let stack = MinidumpMemory::read(&raw.stack, all, endian).ok();
+                threads.push(MinidumpThread {
+                    raw,
+                    raw_e2k: None,
+                    context,
+                    stack,
+                    proc_stack: None,
+                    chain_stack: None,
+                    endian,
+                });
+            }
+            Ok(MinidumpThreadList {
+                threads,
+                thread_ids,
+            })
         }
-        Ok(MinidumpThreadList {
-            threads,
-            thread_ids,
-        })
     }
 }
 
