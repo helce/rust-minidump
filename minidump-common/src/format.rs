@@ -1443,7 +1443,6 @@ pub struct CONTEXT_X86 {
 pub struct CONTEXT_E2K {
     pub context_flags: u32,
     pub _pad0: u32,
-    pub g: [u64; 32],
     pub usbr: u64,
     pub usd_lo: u64,
     pub usd_hi: u64,
