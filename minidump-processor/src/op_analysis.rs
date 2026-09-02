@@ -16,11 +16,12 @@
 
 #![deny(missing_docs)]
 
-use minidump::{MinidumpContext, MinidumpRawContext, UnifiedMemory};
+use minidump::{MinidumpContext, UnifiedMemory};
 use std::collections::BTreeSet;
 
 /// Error type for the functions in this module
 #[derive(Debug, thiserror::Error)]
+#[cfg_attr(not(feature = "disasm_amd64"), expect(dead_code))]
 pub enum OpAnalysisError {
     /// CPU architecture not available (or not enabled by current feature set)
     #[error("unsupported CPU architecture")]
@@ -88,6 +89,36 @@ pub struct InstructionProperties {
 #[derive(Clone, Debug)]
 pub struct MemoryAccessList {
     pub accesses: Vec<MemoryAccess>,
+}
+
+impl MemoryAccessList {
+    /// Check if an access with a given address and type is on the list
+    pub fn contains_access(&self, address: u64, access_type: MemoryAccessType) -> bool {
+        self.iter().any(|access| {
+            let Some(size) = access.size else {
+                // We don't care about the rare case where access size is unknown
+                return false;
+            };
+            let lower_bound = access.address_info.address;
+            let (upper_bound, overflowed) =
+                access.address_info.address.overflowing_add(size as u64);
+            access.access_type == access_type
+                && match overflowed {
+                    true => lower_bound <= address || address < upper_bound,
+                    false => lower_bound <= address && address < upper_bound,
+                }
+        })
+    }
+
+    /// Get an iterator of the memory access vector
+    pub fn iter(&self) -> std::slice::Iter<'_, MemoryAccess> {
+        self.accesses.iter()
+    }
+
+    /// Check if there is any memory access in the list
+    pub fn is_empty(&self) -> bool {
+        self.accesses.is_empty()
+    }
 }
 
 /// Details about a memory access performed by an instruction
@@ -176,17 +207,22 @@ pub fn analyze_thread_context(
     memory_list: &minidump::UnifiedMemoryList,
     stack_memory: Option<UnifiedMemory>,
 ) -> Result<OpAnalysis, OpAnalysisError> {
-    let instruction_bytes = get_thread_instruction_bytes(context, memory_list)?;
-
     match context.raw {
         #[cfg(feature = "disasm_amd64")]
-        MinidumpRawContext::Amd64(_) => self::amd64::analyze_instruction(
-            context,
-            instruction_bytes,
-            Some(memory_list),
-            stack_memory,
-        ),
-        _ => Err(OpAnalysisError::UnsupportedCpuArch),
+        minidump::MinidumpRawContext::Amd64(_) => {
+            let instruction_bytes = get_thread_instruction_bytes(context, memory_list)?;
+            self::amd64::analyze_instruction(
+                context,
+                instruction_bytes,
+                Some(memory_list),
+                stack_memory,
+            )
+        }
+        _ => {
+            _ = memory_list;
+            _ = stack_memory;
+            Err(OpAnalysisError::UnsupportedCpuArch)
+        }
     }
 }
 
@@ -198,6 +234,7 @@ pub fn analyze_thread_context(
 /// # Errors
 ///
 /// This may fail if there are no bytes at the instruction pointer.
+#[cfg(feature = "disasm_amd64")]
 fn get_thread_instruction_bytes<'a>(
     context: &MinidumpContext,
     memory_list: &'a minidump::UnifiedMemoryList<'a>,
@@ -379,34 +416,6 @@ mod amd64 {
                 access_list.add_underivable_opcode_accesses(instruction, context)?;
             }
             Ok(access_list)
-        }
-
-        /// Check if an access with a given address and type is on the list
-        pub fn contains_access(&self, address: u64, access_type: MemoryAccessType) -> bool {
-            self.iter().any(|access| {
-                let Some(size) = access.size else {
-                    // We don't care about the rare case where access size is unknown
-                    return false;
-                };
-                let lower_bound = access.address_info.address;
-                let (upper_bound, overflowed) =
-                    access.address_info.address.overflowing_add(size as u64);
-                access.access_type == access_type
-                    && match overflowed {
-                        true => lower_bound <= address || address < upper_bound,
-                        false => lower_bound <= address && address < upper_bound,
-                    }
-            })
-        }
-
-        /// Get an iterator of the memory access vector
-        pub fn iter(&self) -> std::slice::Iter<'_, MemoryAccess> {
-            self.accesses.iter()
-        }
-
-        /// Check if there is any memory access in the list
-        pub fn is_empty(&self) -> bool {
-            self.accesses.is_empty()
         }
 
         fn add_derivable_opcode_accesses(

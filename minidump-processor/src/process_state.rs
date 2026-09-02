@@ -174,21 +174,20 @@ impl From<MinidumpLinuxProcLimits<'_>> for LinuxProcLimits {
                     .map(|x| x.to_string())
                     .collect::<Vec<String>>()
             })
-            .map(|m| {
-                let u = if m.len() == 3 {
-                    "n/a".to_string()
-                } else {
-                    m[3].trim().to_string()
-                };
+            .filter_map(|m| {
+                let unit = m
+                    .get(3)
+                    .map(|u| u.trim().to_owned())
+                    .unwrap_or_else(|| "n/a".to_owned());
 
-                let name = m[0].trim().to_string();
+                let name = m.first()?.trim().to_owned();
                 let lim = LinuxProcLimit {
-                    soft: parse_limit(&m[1]),
-                    hard: parse_limit(&m[2]),
-                    unit: u,
+                    soft: parse_limit(m.get(1)?),
+                    hard: parse_limit(m.get(2)?),
+                    unit,
                 };
 
-                (name, lim)
+                Some((name, lim))
             })
             .collect();
 
@@ -1055,6 +1054,9 @@ Unknown streams encountered:
                 })
             }).collect::<Vec<_>>(),
             "pid": self.process_id,
+            "process_uptime": self.process_create_time.map(|time| {
+                self.time.duration_since(time).unwrap_or_default().as_secs()
+            }),
             "thread_count": self.threads.len(),
             "threads": self.threads.iter().map(|thread| json!({
                 "frame_count": thread.frames.len(),

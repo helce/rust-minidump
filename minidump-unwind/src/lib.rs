@@ -406,7 +406,7 @@ impl CallStack {
                     if output.chars().count() + next.chars().count() > 80 {
                         // Flush the buffer.
                         writeln!(f, " {output}")?;
-                        output.truncate(0);
+                        output.clear();
                     }
                     output.push_str(&next);
                 }
@@ -562,9 +562,12 @@ struct CfiStackWalker<'a, C: CpuContext> {
 
     callee_ctx: &'a C,
     callee_validity: &'a MinidumpContextValidity,
+    callee_lr_is_heuristic: bool,
 
     caller_ctx: C,
     caller_validity: HashSet<&'static str>,
+
+    cfi_rules_start_address: Option<u64>,
 
     module: &'a MinidumpModule,
     stack_memory: UnifiedMemory<'a, 'a>,
@@ -593,12 +596,15 @@ where
 
             callee_ctx: ctx,
             callee_validity: args.valid(),
+            callee_lr_is_heuristic: false,
 
             // Default to forwarding all callee-saved regs verbatim.
             // The CFI evaluator may clear or overwrite these values.
             // The stack pointer and instruction pointer are not included.
             caller_ctx: ctx.clone(),
             caller_validity: callee_forwarded_regs(args.valid()),
+
+            cfi_rules_start_address: None,
 
             module,
             stack_memory: args.stack_memory,
@@ -627,6 +633,12 @@ where
         result.and_then(|val| u64::try_from(val).ok())
     }
     fn get_callee_register(&self, name: &str) -> Option<u64> {
+        if self.callee_lr_is_heuristic
+            && matches!(name, "lr" | "x30")
+            && self.cfi_rules_start_address != Some(self.instruction)
+        {
+            return None;
+        }
         self.callee_ctx
             .get_register(name, self.callee_validity)
             .and_then(|val| u64::try_from(val).ok())
@@ -653,6 +665,9 @@ where
         let val = C::Register::try_from(val).ok()?;
         self.caller_validity.insert(instruction_pointer_reg);
         self.caller_ctx.set_register(instruction_pointer_reg, val)
+    }
+    fn set_cfi_rules_start_address(&mut self, addr: Option<u64>) {
+        self.cfi_rules_start_address = addr;
     }
 }
 

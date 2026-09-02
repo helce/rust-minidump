@@ -2674,11 +2674,11 @@ impl MinidumpLinuxMapInfo<'_> {
     }
 
     pub fn memory_range(&self) -> Option<Range<u64>> {
-        // final address is inclusive afaik
-        if self.map.address.0 > self.map.address.1 {
+        // final address turns out to be exclusive
+        if self.map.address.0 >= self.map.address.1 {
             return None;
         }
-        Some(Range::new(self.map.address.0, self.map.address.1))
+        Some(Range::new(self.map.address.0, self.map.address.1 - 1))
     }
 
     /// Whether this memory range was readable.
@@ -4414,7 +4414,9 @@ impl CrashReason {
 
         // Refine the output for error codes that have more info
         match reason {
-            CrashReason::WindowsGeneral(ExceptionCodeWindows::EXCEPTION_ACCESS_VIOLATION) => {
+            CrashReason::WindowsGeneral(ExceptionCodeWindows::EXCEPTION_ACCESS_VIOLATION)
+                if record.number_parameters >= 1 =>
+            {
                 // For EXCEPTION_ACCESS_VIOLATION, Windows puts the address that
                 // caused the fault in exception_information[1].
                 // exception_information[0] is 0 if the violation was caused by
@@ -4422,14 +4424,14 @@ impl CrashReason {
                 // and 8 if this was a data execution violation.
                 // This information is useful in addition to the code address, which
                 // will be present in the crash thread's instruction field anyway.
-                if record.number_parameters >= 1 {
-                    // NOTE: address := info[1];
-                    if let Some(ty) = err::ExceptionCodeWindowsAccessType::from_u64(info[0]) {
-                        reason = CrashReason::WindowsAccessViolation(ty);
-                    }
+                // NOTE: address := info[1];
+                if let Some(ty) = err::ExceptionCodeWindowsAccessType::from_u64(info[0]) {
+                    reason = CrashReason::WindowsAccessViolation(ty);
                 }
             }
-            CrashReason::WindowsGeneral(ExceptionCodeWindows::EXCEPTION_IN_PAGE_ERROR) => {
+            CrashReason::WindowsGeneral(ExceptionCodeWindows::EXCEPTION_IN_PAGE_ERROR)
+                if record.number_parameters >= 3 =>
+            {
                 // For EXCEPTION_IN_PAGE_ERROR, Windows puts the address that
                 // caused the fault in exception_information[1].
                 // exception_information[0] is 0 if the violation was caused by
@@ -4439,25 +4441,22 @@ impl CrashReason {
                 // which is the explanation for why this error occured.
                 // This information is useful in addition to the code address, which
                 // will be present in the crash thread's instruction field anyway.
-                if record.number_parameters >= 3 {
-                    // NOTE: address := info[1];
-                    // The status code is 32-bits wide, ignore the upper 32 bits
-                    let nt_status = info[2] & 0xffff_ffff;
-                    if let Some(ty) = err::ExceptionCodeWindowsInPageErrorType::from_u64(info[0]) {
-                        reason = CrashReason::WindowsInPageError(ty, nt_status);
-                    }
+                // NOTE: address := info[1];
+                // The status code is 32-bits wide, ignore the upper 32 bits
+                let nt_status = info[2] & 0xffff_ffff;
+                if let Some(ty) = err::ExceptionCodeWindowsInPageErrorType::from_u64(info[0]) {
+                    reason = CrashReason::WindowsInPageError(ty, nt_status);
                 }
             }
-            CrashReason::WindowsNtStatus(err::NtStatusWindows::STATUS_STACK_BUFFER_OVERRUN) => {
+            CrashReason::WindowsNtStatus(err::NtStatusWindows::STATUS_STACK_BUFFER_OVERRUN)
                 // STATUS_STACK_BUFFER_OVERRUN are caused by __fastfail()
                 // invocations and the fast-fail code is stored in
                 // exception_information[0].
-                if record.number_parameters >= 1 {
+                if record.number_parameters >= 1 => {
                     // The status code is 32-bits wide, ignore the upper 32 bits
                     let fast_fail = info[0] & 0xffff_ffff;
                     reason = CrashReason::WindowsStackBufferOverrun(fast_fail);
                 }
-            }
             _ => {
                 // Do nothing interesting
             }
@@ -5918,7 +5917,7 @@ where
             self.header.flags,
         )?;
         let mut streams = self.streams.iter().collect::<Vec<_>>();
-        streams.sort_by(|&(&_, &(a, _)), &(&_, &(b, _))| a.cmp(&b));
+        streams.sort_by_key(|&(&_, &(a, _))| a);
         for &(_, &(i, ref stream)) in streams.iter() {
             write!(
                 f,
@@ -5937,7 +5936,7 @@ MDRawDirectory
             )?;
         }
         writeln!(f, "Streams:")?;
-        streams.sort_by(|&(&a, &(_, _)), &(&b, &(_, _))| a.cmp(&b));
+        streams.sort_by_key(|&(&a, &(_, _))| a);
         for (_, &(i, ref stream)) in streams {
             writeln!(
                 f,
@@ -6340,7 +6339,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, Path("/usr/lib64/libtdb1.so".into()));
 
             assert!(
@@ -6359,7 +6358,7 @@ mod test {
             assert_eq!(map.map.address.1, 0xffffffffff601000);
             assert_eq!(
                 map.memory_range(),
-                Some(Range::new(0xffffffffff600000, 0xffffffffff601000))
+                Some(Range::new(0xffffffffff600000, 0xffffffffff600fff))
             );
             assert_eq!(
                 map.map.pathname,
@@ -6379,7 +6378,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, Stack);
             assert!(map.map.perms == MMPermissions::NONE);
         }
@@ -6390,7 +6389,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, TStack(1234567));
             assert!(map.map.perms == MMPermissions::NONE);
         }
@@ -6401,7 +6400,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, Heap);
             assert!(map.map.perms == MMPermissions::NONE);
         }
@@ -6412,7 +6411,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, Vdso);
             assert!(
                 map.map.perms
@@ -6426,7 +6425,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, Other("asdfasd".into()));
             assert!(
                 map.map.perms
@@ -6440,7 +6439,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, Anonymous);
             assert!(map.map.perms == MMPermissions::READ);
         }
@@ -6452,7 +6451,7 @@ mod test {
 
             assert_eq!(map.map.address.0, 0x10a00);
             assert_eq!(map.map.address.1, 0x10b00);
-            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10b00)));
+            assert_eq!(map.memory_range(), Some(Range::new(0x10a00, 0x10aff)));
             assert_eq!(map.map.pathname, Anonymous);
             assert!(map.map.perms == MMPermissions::NONE);
         }
@@ -6468,12 +6467,12 @@ mod test {
         }
 
         {
-            // Equal ranges are valid
+            // Equal ranges are 0-sized.
             let map = parse(b"fffff-fffff --- 10bac9000 fd:05 1196511  ");
 
             assert_eq!(map.map.address.0, 0xfffff);
             assert_eq!(map.map.address.1, 0xfffff);
-            assert_eq!(map.memory_range(), Some(Range::new(0xfffff, 0xfffff)));
+            assert_eq!(map.memory_range(), None);
         }
 
         {
@@ -6502,6 +6501,35 @@ mod test {
             let map = maybe_parse(b"10a00-10b00 r-xp 10bac9000 fd:05 1196511 [stack:a10]");
             assert!(map.is_none());
         }
+    }
+
+    #[test]
+    fn test_linux_maps_contiguous_lookup() {
+        // Ensure mappings in a run of contiguous regions stay resolvable.
+        let maps = MinidumpLinuxMaps::from_regions(vec![
+            MinidumpLinuxMapInfo::from_line(b"10a00-10b00 r-xp 0 fd:05 1 ").unwrap(),
+            MinidumpLinuxMapInfo::from_line(b"10b00-10c00 rw-p 0 fd:05 2 ").unwrap(),
+            MinidumpLinuxMapInfo::from_line(b"10c00-10d00 r--p 0 fd:05 3 ").unwrap(),
+        ]);
+
+        // Cursory sanity checks
+        assert_eq!(maps.memory_map_count(), 3);
+        for addr in [0x10a00, 0x10aff, 0x10b00, 0x10c50, 0x10cff] {
+            assert!(maps.memory_info_at_address(addr).is_some());
+        }
+
+        // Boundaries are correctly mapped.
+        assert_eq!(
+            maps.memory_info_at_address(0x10b00).unwrap().map.address.0,
+            0x10b00
+        );
+        assert_eq!(
+            maps.memory_info_at_address(0x10aff).unwrap().map.address.0,
+            0x10a00
+        );
+
+        // Outer address is unbound
+        assert!(maps.memory_info_at_address(0x10d00).is_none());
     }
 
     #[test]
