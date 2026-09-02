@@ -204,8 +204,6 @@ pub struct FileLookup {
 /// `<debug filename>/<debug identifier>/<debug filename>.sym`. If
 /// `debug filename` ends with *.pdb* the leaf filename will have that
 /// removed.
-/// `extension` is the expected extension for the symbol filename, generally
-/// *sym* if Breakpad text format symbols are expected.
 ///
 /// The debug filename and debug identifier can be found in the
 /// [first line][module_line] of the symbol file output by the dump_syms tool.
@@ -216,6 +214,14 @@ pub struct FileLookup {
 /// [packagesymbols]: https://gist.github.com/luser/2ad32d290f224782fcfc#file-packagesymbols-py
 pub fn breakpad_sym_lookup(module: &(dyn Module + Sync)) -> Option<FileLookup> {
     let debug_file = module.debug_file()?;
+    let debug_file = if debug_file.is_empty() {
+        // If the debug_file info is empty, fallback to the code_file.
+        // This can be the case on Windows minidumps generated for gcc MingW-w64 builds
+        // as GCC does not support PDB generation there.
+        module.code_file()
+    } else {
+        debug_file
+    };
     let debug_id = module.debug_identifier()?;
 
     let leaf = leafname(&debug_file);
@@ -476,6 +482,7 @@ impl SymbolSupplier for SimpleSymbolSupplier {
         trace!("SimpleSymbolSupplier search");
         if let Some(lookup) = lookup(module, file_kind) {
             for path in self.paths.iter() {
+                trace!("SimpleSymbolSupplier looking for {}", path.display());
                 if path.is_file() && file_kind == FileKind::BreakpadSym {
                     if let Ok(sf) = SymbolFile::from_file(path) {
                         if sf.module_id == lookup.debug_id {
@@ -485,6 +492,10 @@ impl SymbolSupplier for SimpleSymbolSupplier {
                     }
                 } else if path.is_dir() {
                     let test_path = path.join(lookup.cache_rel.clone());
+                    trace!(
+                        "SimpleSymbolSupplier looking for file {}",
+                        test_path.display()
+                    );
                     if fs::metadata(&test_path).ok().is_some_and(|m| m.is_file()) {
                         trace!("SimpleSymbolSupplier found file {}", test_path.display());
                         return Ok(test_path);
@@ -1003,6 +1014,19 @@ mod test {
                 "foo.pdb/ABCD1234ABCD1234ABCDABCD12345678a/foo.sym"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_empty_debug_file_breakpad_sym_lookup() {
+        // Test module with empty debug_file name
+        let m = SimpleModule {
+            debug_file: Some("".to_string()),
+            code_file: Some("foo.dll".to_string()),
+            debug_id: DebugId::from_str("abcd1234-0000-0000-0000-abcd12345678-a").ok(),
+            ..SimpleModule::default()
+        };
+
+        assert_eq!(&breakpad_sym_lookup(&m).unwrap().debug_file, "foo.dll.sym");
     }
 
     #[tokio::test]

@@ -3,6 +3,11 @@
 Nothing Yet!
 
 
+# Version 0.26.1 (2025-11-03)
+
+* Various improvements during stack walking and when processing malformed
+  minidumps.
+
 # Version 0.26.0 (2025-06-20)
 
 * Add support for parsing and printing Chromium stability report streams

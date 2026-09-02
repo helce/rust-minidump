@@ -718,7 +718,7 @@ fn location_slice<'a>(
 fn read_string_utf16(offset: &mut usize, bytes: &[u8], endian: scroll::Endian) -> Option<String> {
     let u: u32 = bytes.gread_with(offset, endian).ok()?;
     let size = u as usize;
-    if size % 2 != 0 || (*offset + size) > bytes.len() {
+    if !size.is_multiple_of(2) || (*offset + size) > bytes.len() {
         return None;
     }
     let encoding = match endian {
@@ -1786,18 +1786,21 @@ impl MinidumpHandleDescriptor {
         offset: usize,
         ctx: HandleDescriptorContext,
     ) -> Option<MinidumpHandleObjectInformation> {
-        if offset != 0 {
-            ctx.bytes
-                .pread_with::<md::MINIDUMP_HANDLE_OBJECT_INFORMATION>(offset, ctx.endianess)
-                .ok()
-                .map(|raw| MinidumpHandleObjectInformation {
-                    raw: raw.clone(),
-                    info_type: md::MINIDUMP_HANDLE_OBJECT_INFORMATION_TYPE::from_u32(raw.info_type)
-                        .unwrap(),
-                })
-        } else {
-            None
+        if offset == 0 {
+            return None;
         }
+
+        ctx.bytes
+            .pread_with::<md::MINIDUMP_HANDLE_OBJECT_INFORMATION>(offset, ctx.endianess)
+            .ok()
+            .and_then(|raw| {
+                Some(MinidumpHandleObjectInformation {
+                    raw: raw.clone(),
+                    info_type: md::MINIDUMP_HANDLE_OBJECT_INFORMATION_TYPE::from_u32(
+                        raw.info_type,
+                    )?,
+                })
+            })
     }
 }
 
@@ -2566,7 +2569,7 @@ impl<'a> MinidumpStream<'a> for MinidumpLinuxMaps<'a> {
         _system_info: Option<&MinidumpSystemInfo>,
     ) -> Result<MinidumpLinuxMaps<'a>, Error> {
         let maps = MemoryMaps::from_read(std::io::Cursor::new(bytes)).map_err(|e| {
-            tracing::error!("linux memory map read error: {e}");
+            tracing::warn!("linux memory map read error: {e}");
             Error::StreamReadFailure
         })?;
 
@@ -3193,7 +3196,7 @@ impl MinidumpThreadInfoList {
             self.thread_infos.len()
         )?;
         for (i, thread_info) in self.thread_infos.iter().enumerate() {
-            writeln!(f, "thread info[{}]", i)?;
+            writeln!(f, "thread info[{i}]")?;
             thread_info.print(f)?;
         }
         Ok(())
