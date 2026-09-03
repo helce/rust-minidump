@@ -3029,7 +3029,7 @@ impl<'a> MinidumpStream<'a> for MinidumpThreadList<'a> {
         system_info: Option<&MinidumpSystemInfo>,
     ) -> Result<MinidumpThreadList<'a>, Error> {
         let mut offset = 0;
-        if system_info.unwrap().cpu == Cpu::E2k {
+        if system_info.is_some_and(|info| info.cpu == Cpu::E2k) {
             let raw_threads: Vec<md::MINIDUMP_THREAD_EXTEND> = read_stream_list(&mut offset, bytes, endian)?;
             let mut threads = Vec::with_capacity(raw_threads.len());
             let mut thread_ids = HashMap::with_capacity(raw_threads.len());
